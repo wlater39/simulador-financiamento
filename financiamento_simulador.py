@@ -5,6 +5,11 @@ from datetime import datetime
 import json
 import plotly.express as px
 import plotly.graph_objects as go
+import locale
+from decimal import Decimal, ROUND_HALF_UP
+
+# Configurar locale para formato brasileiro
+locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 # Configuração da página
 st.set_page_config(
@@ -12,6 +17,32 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+def formatar_valor_contabil(valor):
+    """Formata valor para o padrão contábil brasileiro (R$ 0.000,00)"""
+    try:
+        # Arredondar para 2 casas decimais
+        valor_decimal = Decimal(str(valor)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # Formatar com R$ e separadores
+        return f"R$ {valor_decimal:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return f"R$ 0,00"
+
+def formatar_numero(valor, casas_decimais=2):
+    """Formata número com quantidade específica de casas decimais"""
+    try:
+        valor_decimal = Decimal(str(valor)).quantize(Decimal(f'0.{"0" * casas_decimais}'), rounding=ROUND_HALF_UP)
+        return f"{valor_decimal:,.{casas_decimais}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return f"0,00"
+
+def formatar_percentual(valor, casas_decimais=2):
+    """Formata valor percentual"""
+    try:
+        valor_percentual = valor * 100
+        return f"{formatar_numero(valor_percentual, casas_decimais)}%"
+    except:
+        return f"0,00%"
 
 def carregar_dados_json(caminho_json="financiamento.json"):
     """Carrega os dados do arquivo JSON gerado pelo pdf_to_json_converter.py"""
@@ -295,115 +326,204 @@ tab1, tab2, tab3, tab4 = st.tabs(["Visão Geral", "Cronograma", "Simulador", "De
 
 with tab1:
     # Visão Geral
-    st.subheader("Situação Atual do Contrato")
+    st.subheader("Situação do contrato")
     
     # Encontrar última operação realizada (parcela paga ou amortização)
     df_pagos = df_original[df_original['situacao_parcela'].isin(['Paga', 'Amortizado'])]
     ultima_operacao = df_pagos.iloc[-1] if len(df_pagos) > 0 else None
     
+    # Criar dois containers lado a lado com bordas
     col1, col2 = st.columns(2)
     
+    # Dados do Contrato
     with col1:
-        st.subheader("Visão do Contrato")
+        # Valores originais do contrato (fixos)
+        valor_financiado = 815000.00
+        prazo_original = 420
         
-        # Métricas do contrato
-        col_met1, col_met2 = st.columns(2)
-        with col_met1:
-            st.metric(
-                "Valor Financiado",
-                f"R$ {df_original['saldo_devedor'].iloc[0]:,.2f}"
-            )
-            st.metric(
-                "Prazo Original",
-                f"{len(df_original)} meses"
-            )
+        # Valores atuais do contrato (do JSON)
+        valor_total_pagar = df_original['valor_total_pago'].iloc[-1]
         
-        with col_met2:
-            st.metric(
-                "Valor Total a Pagar",
-                f"R$ {df_original['valor_total_pago'].iloc[-1]:,.2f}"
-            )
-            st.metric(
-                "Prazo Restante",
-                f"{len(df_original) - len(df_original[df_original['situacao_parcela'].isin(['Paga', 'Amortizado'])])} meses"
-            )
+        # Cálculo correto do prazo restante
+        total_parcelas = len(df_original[df_original['tipo'] == 'parcela'])
+        parcelas_pagas = len(df_original[df_original['situacao_parcela'] == 'Paga'])
+        prazo_restante = total_parcelas - parcelas_pagas
+        
+        st.markdown(f"""
+            <div style='border: 1px solid #e0e0e0; border-radius: 5px; padding: 1rem;'>
+                <h4 style='font-size: 1.1rem; margin-bottom: 1rem;'>Dados do Contrato</h4>
+                <div style='margin-bottom: 0.5rem;'>
+                    <span style='color: #666; font-size: 0.9rem;'>Valor Financiado</span><br>
+                    <span style='font-size: 1.2rem;'>{formatar_valor_contabil(valor_financiado)}</span>
+                </div>
+                <div style='margin-bottom: 0.5rem;'>
+                    <span style='color: #666; font-size: 0.9rem;'>Prazo Original</span><br>
+                    <span style='font-size: 1.2rem;'>{formatar_numero(prazo_original, 0)} meses</span>
+                </div>
+                <div style='margin-bottom: 0.5rem;'>
+                    <span style='color: #666; font-size: 0.9rem;'>Valor Total a Pagar</span><br>
+                    <span style='font-size: 1.2rem;'>{formatar_valor_contabil(valor_total_pagar)}</span>
+                </div>
+                <div>
+                    <span style='color: #666; font-size: 0.9rem;'>Prazo Restante</span><br>
+                    <span style='font-size: 1.2rem;'>{formatar_numero(prazo_restante, 0)} meses</span>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
     
+    # Valores pagos até o momento
     with col2:
-        st.subheader("Valores Pagos até o Momento")
-        
         if ultima_operacao is not None:
-            col_met3, col_met4 = st.columns(2)
-            with col_met3:
-                st.metric(
-                    "Valor Total Pago",
-                    f"R$ {ultima_operacao['valor_total_pago']:,.2f}"
-                )
-                st.metric(
-                    "Principal Pago",
-                    f"R$ {ultima_operacao['valor_total_amortizado']:,.2f}"
-                )
-            
-            with col_met4:
-                st.metric(
-                    "Juros Pagos",
-                    f"R$ {ultima_operacao['valor_total_juros']:,.2f}"
-                )
-                st.metric(
-                    "Saldo Devedor Atual",
-                    f"R$ {ultima_operacao['saldo_devedor']:,.2f}"
-                )
-            
-            # Gráfico de composição dos pagamentos
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                name='Principal',
-                y=['Total'],
-                x=[ultima_operacao['valor_total_amortizado']],
-                orientation='h',
-                marker_color='#2ecc71'
-            ))
-            fig.add_trace(go.Bar(
-                name='Juros',
-                y=['Total'],
-                x=[ultima_operacao['valor_total_juros']],
-                orientation='h',
-                marker_color='#e74c3c'
-            ))
-            
-            fig.update_layout(
-                barmode='stack',
-                height=200,
-                showlegend=True,
-                margin=dict(l=0, r=0, t=0, b=0),
-                title='Composição dos Pagamentos Realizados'
+            # Calcular valor total amortizado (soma das operações de amortização)
+            amortizacoes_extras = sum(
+                evento.get('valor', 0)
+                for evento in dados_json['eventos']
+                if evento['tipo'] == 'operacao' and 'Amortizacaoreducaodeprazorecursoproprio' in evento.get('descricao', '')
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            # Valor total de juros original e cálculo de economia
+            juros_total_original = 1432084.96
+            juros_atuais = df_original['juros'].sum()  # Total de juros (pagos + a pagar)
+            juros_economizados = juros_total_original - juros_atuais
+            
+            st.markdown(f"""
+                <div style='border: 1px solid #e0e0e0; border-radius: 5px; padding: 1rem;'>
+                    <h4 style='font-size: 1.1rem; margin-bottom: 1rem;'>Valores pagos até o momento</h4>
+                    <div style='margin-bottom: 0.5rem;'>
+                        <span style='color: #666; font-size: 0.9rem;'>Valor Total Pago</span><br>
+                        <span style='font-size: 1.2rem;'>{formatar_valor_contabil(ultima_operacao['valor_total_pago'])}</span>
+                    </div>
+                    <div style='margin-bottom: 0.5rem;'>
+                        <span style='color: #666; font-size: 0.9rem;'>Principal Pago</span><br>
+                        <span style='font-size: 1.2rem;'>{formatar_valor_contabil(ultima_operacao['valor_total_amortizado'])}</span>
+                    </div>
+                    <div style='margin-bottom: 0.5rem;'>
+                        <span style='color: #666; font-size: 0.9rem;'>Juros Pagos</span><br>
+                        <span style='font-size: 1.2rem;'>{formatar_valor_contabil(ultima_operacao['valor_total_juros'])}</span>
+                    </div>
+                    <div style='margin-bottom: 0.5rem;'>
+                        <span style='color: #666; font-size: 0.9rem;'>Valor Amortizado</span><br>
+                        <span style='font-size: 1.2rem;'>{formatar_valor_contabil(amortizacoes_extras)}</span>
+                    </div>
+                    <div style='margin-bottom: 0.5rem;'>
+                        <span style='color: #666; font-size: 0.9rem;'>Juros Economizados</span><br>
+                        <span style='font-size: 1.2rem;'>{formatar_valor_contabil(juros_economizados)}</span>
+                    </div>
+                    <div>
+                        <span style='color: #666; font-size: 0.9rem;'>Saldo Devedor Atual</span><br>
+                        <span style='font-size: 1.2rem;'>{formatar_valor_contabil(ultima_operacao['saldo_devedor'])}</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
         else:
             st.info("Nenhuma parcela paga até o momento.")
+    
+    # Adicionar espaço antes do gráfico
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Gráfico de composição dos pagamentos
+    if ultima_operacao is not None:
+        # Calcular valores
+        principal_pago = ultima_operacao['valor_total_amortizado']
+        juros_pagos = ultima_operacao['valor_total_juros']
+        valor_restante = df_original['valor_total_pago'].iloc[-1] - (principal_pago + juros_pagos)
+        
+        # Criar título personalizado
+        st.markdown("### Proporção de Pagamento")
+        
+        # Criar o gráfico com plotly
+        fig = go.Figure()
+        
+        # Adicionar as barras em sequência
+        fig.add_trace(go.Bar(
+            name='Principal Pago',
+            x=[principal_pago],
+            y=[''],
+            orientation='h',
+            marker=dict(color='#2ecc71'),
+            text=formatar_valor_contabil(principal_pago),
+            textposition='auto',
+            hovertemplate=f'Principal Pago: {formatar_valor_contabil(principal_pago)}<extra></extra>'
+        ))
+        
+        fig.add_trace(go.Bar(
+            name='Juros Pagos',
+            x=[juros_pagos],
+            y=[''],
+            orientation='h',
+            marker=dict(color='#e74c3c'),
+            text=formatar_valor_contabil(juros_pagos),
+            textposition='auto',
+            hovertemplate=f'Juros Pagos: {formatar_valor_contabil(juros_pagos)}<extra></extra>'
+        ))
+        
+        fig.add_trace(go.Bar(
+            name='Saldo Devedor',
+            x=[valor_restante],
+            y=[''],
+            orientation='h',
+            marker=dict(color='#ecf0f1'),
+            text=formatar_valor_contabil(valor_restante),
+            textposition='auto',
+            hovertemplate=f'Saldo Devedor: {formatar_valor_contabil(valor_restante)}<extra></extra>'
+        ))
+        
+        # Atualizar o layout
+        fig.update_layout(
+            barmode='stack',
+            height=100,
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=0, r=0, t=30, b=0),
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            xaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                showline=False,
+                showticklabels=False
+            ),
+            yaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                showline=False,
+                showticklabels=False
+            )
+        )
+        
+        # Mostrar o gráfico
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Adicionar legenda com os valores em texto
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(f"**Principal Pago**<br>{formatar_valor_contabil(principal_pago)}", unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"**Juros Pagos**<br>{formatar_valor_contabil(juros_pagos)}", unsafe_allow_html=True)
+        with col3:
+            st.markdown(f"**Saldo Devedor**<br>{formatar_valor_contabil(valor_restante)}", unsafe_allow_html=True)
+    else:
+        st.info("Nenhuma parcela paga até o momento.")
 
 with tab2:
     # Cronograma
     st.subheader("Cronograma de Pagamentos")
     
-    # Estilizar DataFrame
-    def color_status(val):
-        if val == 'Paga':
-            return 'background-color: #2ecc71'
-        elif val == 'Amortizado':
-            return 'background-color: #3498db'
-        return ''
-    
-    # Definir ordem das colunas
-    colunas = [
-        "numero", "vencimento", "amortizacao", "juros", 
-        "seguro_mip", "seguro_df", "taxa_adm", 
-        "valor_parcela", "saldo_devedor", "situacao_parcela"
-    ]
+    # Formatar valores monetários
+    df_display = df_original.copy()
+    colunas_monetarias = ['valor_parcela', 'amortizacao', 'juros', 'saldo_devedor', 'seguro_mip', 'seguro_df', 'taxa_adm']
+    for col in colunas_monetarias:
+        df_display[col] = df_display[col].apply(lambda x: formatar_valor_contabil(x) if pd.notnull(x) else "-")
     
     # Mostrar DataFrame com todas as colunas
     st.dataframe(
-        df_original[colunas].style.applymap(color_status, subset=['situacao_parcela']),
+        df_display,
         use_container_width=True
     )
 
@@ -497,11 +617,11 @@ with tab3:
         total_a_pagar = total_parcelas + total_amortizacoes_extras
         
         metricas_original = {
-            "Valor financiado": f"R$ {valor_financiado:,.2f}",
-            "Valor total a ser pago": f"R$ {total_a_pagar:,.2f}",
-            "Total amortizado (extra)": f"R$ {total_amortizacoes_extras:,.2f}",
-            "Total de juros": f"R$ {df_original['juros'].sum():,.2f}",
-            "Quantidade de parcelas": len(df_original[df_original['tipo'] == 'parcela']),
+            "Valor financiado": formatar_valor_contabil(valor_financiado),
+            "Valor total a ser pago": formatar_valor_contabil(total_a_pagar),
+            "Total amortizado (extra)": formatar_valor_contabil(total_amortizacoes_extras),
+            "Total de juros": formatar_valor_contabil(df_original['juros'].sum()),
+            "Quantidade de parcelas": formatar_numero(len(df_original[df_original['tipo'] == 'parcela']), 0),
             "Data da última parcela": df_original[df_original['tipo'] == 'parcela']['vencimento'].iloc[-1]
         }
         
@@ -519,11 +639,11 @@ with tab3:
         total_a_pagar_simulado = total_parcelas_simulado + total_amortizacoes_extras_simulado
         
         metricas_simulado = {
-            "Valor financiado": f"R$ {valor_financiado:,.2f}",
-            "Valor total a ser pago": f"R$ {total_a_pagar_simulado:,.2f}",
-            "Total amortizado (extra)": f"R$ {total_amortizacoes_extras_simulado:,.2f}",
-            "Total de juros": f"R$ {df_simulado['juros'].sum():,.2f}",
-            "Quantidade de parcelas": len(df_simulado[df_simulado['tipo'] == 'parcela']),
+            "Valor financiado": formatar_valor_contabil(valor_financiado),
+            "Valor total a ser pago": formatar_valor_contabil(total_a_pagar_simulado),
+            "Total amortizado (extra)": formatar_valor_contabil(total_amortizacoes_extras_simulado),
+            "Total de juros": formatar_valor_contabil(df_simulado['juros'].sum()),
+            "Quantidade de parcelas": formatar_numero(len(df_simulado[df_simulado['tipo'] == 'parcela']), 0),
             "Data da última parcela": df_simulado[df_simulado['tipo'] == 'parcela']['vencimento'].iloc[-1]
         }
         
@@ -645,15 +765,20 @@ with tab4:
         })
         
         df_diff['Diferença'] = df_diff['Simulado'] - df_diff['Original']
-        df_diff['Diferença %'] = (df_diff['Diferença'] / df_diff['Original'] * 100).round(2)
+        df_diff['Diferença %'] = (df_diff['Diferença'] / df_diff['Original'] * 100)
         
         # Formatar valores monetários
-        for col in ['Original', 'Simulado', 'Diferença']:
-            df_diff[col] = df_diff.apply(
-                lambda x: f"R$ {x[col]:,.2f}" if x['Métrica'] != 'Número de Parcelas' else f"{x[col]:.0f}",
-                axis=1
-            )
-        df_diff['Diferença %'] = df_diff['Diferença %'].apply(lambda x: f"{x:.2f}%")
+        for idx, row in df_diff.iterrows():
+            if row['Métrica'] != 'Número de Parcelas':
+                df_diff.at[idx, 'Original'] = formatar_valor_contabil(row['Original'])
+                df_diff.at[idx, 'Simulado'] = formatar_valor_contabil(row['Simulado'])
+                df_diff.at[idx, 'Diferença'] = formatar_valor_contabil(row['Diferença'])
+                df_diff.at[idx, 'Diferença %'] = formatar_percentual(row['Diferença %'] / 100)
+            else:
+                df_diff.at[idx, 'Original'] = formatar_numero(row['Original'], 0)
+                df_diff.at[idx, 'Simulado'] = formatar_numero(row['Simulado'], 0)
+                df_diff.at[idx, 'Diferença'] = formatar_numero(row['Diferença'], 0)
+                df_diff.at[idx, 'Diferença %'] = formatar_percentual(row['Diferença %'] / 100)
         
         st.dataframe(df_diff, use_container_width=True)
         
