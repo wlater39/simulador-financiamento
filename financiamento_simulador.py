@@ -5,11 +5,7 @@ from datetime import datetime
 import json
 import plotly.express as px
 import plotly.graph_objects as go
-import locale
 from decimal import Decimal, ROUND_HALF_UP
-
-# Configurar locale para formato brasileiro
-locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 # Configuração da página
 st.set_page_config(
@@ -19,30 +15,41 @@ st.set_page_config(
 )
 
 def formatar_valor_contabil(valor):
-    """Formata valor para o padrão contábil brasileiro (R$ 0.000,00)"""
+    """Formata valor para o padrão contábil brasileiro (R$ 0.000,00) sem depender do locale"""
     try:
         # Arredondar para 2 casas decimais
         valor_decimal = Decimal(str(valor)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        # Formatar com R$ e separadores
-        return f"R$ {valor_decimal:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        # Converter para string e separar parte inteira e decimal
+        valor_str = f"{valor_decimal:,.2f}"
+        parte_inteira, parte_decimal = valor_str.split('.')
+        # Substituir separadores para formato brasileiro
+        parte_inteira = parte_inteira.replace(',', '.')
+        # Montar string final
+        return f"R$ {parte_inteira},{parte_decimal}"
     except:
-        return f"R$ 0,00"
+        return "R$ 0,00"
 
 def formatar_numero(valor, casas_decimais=2):
-    """Formata número com quantidade específica de casas decimais"""
+    """Formata número com quantidade específica de casas decimais sem depender do locale"""
     try:
         valor_decimal = Decimal(str(valor)).quantize(Decimal(f'0.{"0" * casas_decimais}'), rounding=ROUND_HALF_UP)
-        return f"{valor_decimal:,.{casas_decimais}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        valor_str = f"{valor_decimal:,.{casas_decimais}f}"
+        if casas_decimais > 0:
+            parte_inteira, parte_decimal = valor_str.split('.')
+            parte_inteira = parte_inteira.replace(',', '.')
+            return f"{parte_inteira},{parte_decimal}"
+        else:
+            return valor_str.replace(',', '.')
     except:
-        return f"0,00"
+        return "0,00" if casas_decimais > 0 else "0"
 
 def formatar_percentual(valor, casas_decimais=2):
-    """Formata valor percentual"""
+    """Formata valor percentual sem depender do locale"""
     try:
         valor_percentual = valor * 100
         return f"{formatar_numero(valor_percentual, casas_decimais)}%"
     except:
-        return f"0,00%"
+        return "0,00%"
 
 def carregar_dados_json(caminho_json="financiamento.json"):
     """Carrega os dados do arquivo JSON gerado pelo pdf_to_json_converter.py"""
