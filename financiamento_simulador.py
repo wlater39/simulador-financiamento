@@ -81,8 +81,8 @@ def criar_tabela_consolidada(dados_json):
         df["valor_total_pago"] = df["valor_parcela"].cumsum()
         df["valor_total_amortizado"] = df["amortizacao"].cumsum()
         df["valor_total_juros"] = df["juros"].cumsum()
-                
-            return df
+        
+        return df
     except Exception as e:
         st.error(f"Erro ao criar tabela consolidada: {str(e)}")
         return None
@@ -379,7 +379,7 @@ with tab1:
             )
             
             st.plotly_chart(fig, use_container_width=True)
-    else:
+        else:
             st.info("Nenhuma parcela paga até o momento.")
 
 with tab2:
@@ -416,22 +416,22 @@ with tab3:
         col1, col2, col3 = st.columns(3)
         
         with col1:
-        parcela_alvo = st.number_input(
+            parcela_alvo = st.number_input(
                 "Número da Parcela",
-            min_value=1,
+                min_value=1,
                 max_value=len(df_original[df_original["tipo"] == "parcela"]),
-            value=1
-        )
+                value=1
+            )
         
         with col2:
             saldo_atual = float(df_original[df_original["tipo"] == "parcela"].loc[parcela_alvo-1, "saldo_devedor"])
-        valor_amortizacao = st.number_input(
+            valor_amortizacao = st.number_input(
                 "Valor da Amortização (R$)",
-            min_value=0.0,
-            max_value=saldo_atual,
-            value=0.0,
-            format="%.2f"
-        )
+                min_value=0.0,
+                max_value=saldo_atual,
+                value=0.0,
+                format="%.2f"
+            )
         
         with col3:
             tipo_reducao = st.radio(
@@ -442,7 +442,7 @@ with tab3:
         
         col_btn1, col_btn2 = st.columns([1, 4])
         with col_btn1:
-        if st.button("Aplicar Amortização"):
+            if st.button("Aplicar Amortização"):
                 # Salvar amortização na lista de amortizações
                 nova_amortizacao = {
                     'data': datetime.now().strftime("%d/%m/%Y"),
@@ -456,19 +456,19 @@ with tab3:
                 
                 st.session_state.amortizacoes_simuladas.append(nova_amortizacao)
                 
-            st.session_state.df_simulado = calcular_nova_tabela(
+                st.session_state.df_simulado = calcular_nova_tabela(
                     df_original if 'df_simulado' not in st.session_state else st.session_state.df_simulado,
-                parcela_alvo,
+                    parcela_alvo,
                     valor_amortizacao,
                     'prazo' if tipo_reducao == "Redução de Prazo" else 'valor'
-            )
-            st.success("Amortização aplicada com sucesso!")
+                )
+                st.success("Amortização aplicada com sucesso!")
         
         with col_btn2:
-        if st.button("Resetar Simulação"):
-            st.session_state.df_simulado = df_original.copy()
+            if st.button("Resetar Simulação"):
+                st.session_state.df_simulado = df_original.copy()
                 st.session_state.amortizacoes_simuladas = []
-            st.rerun()
+                st.rerun()
     
     # Tabela de amortizações simuladas
     st.markdown("#### Amortizações Aplicadas na Simulação")
@@ -478,7 +478,7 @@ with tab3:
         st.dataframe(df_amortizacoes, use_container_width=True)
     else:
         st.info("Nenhuma amortização simulada ainda.")
-    
+
     # Comparação dos cenários
     st.markdown("#### Comparação dos Cenários")
 
@@ -682,6 +682,4 @@ with tab4:
             height=400
         )
         
-        st.plotly_chart(fig, use_container_width=True)
-
-
+        st.plotly_chart(fig, use_container_width=True) 
